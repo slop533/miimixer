@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mii Mixer</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1d2233;--mut:#667;--ac:#3b82f6;--bd:#dde1ee;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#13151d;--card:#1c2030;--tx:#e8eaf3;--mut:#9aa0b8;--ac:#6ea8ff;--bd:#2f3550;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#13151d;--card:#1c2030;--tx:#e8eaf3;--mut:#9aa0b8;--ac:#6ea8ff;--bd:#2f3550;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+h1{margin:0 0 4px;font-size:24px}p.s{color:var(--mut);margin:0 0 16px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px}
+#drop{border:2px dashed var(--bd);border-radius:10px;padding:22px;text-align:center;color:var(--mut);cursor:pointer}
+#drop.o{border-color:var(--ac);color:var(--ac)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--bd);border-radius:20px;padding:3px 10px;margin:8px 6px 0 0}
+.chip button{border:0;background:none;color:var(--mut);cursor:pointer;font-size:16px;padding:0}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 14px}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--mut);gap:2px}
+select,input[type=text]{font:inherit;padding:6px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)}
+.btn{font:inherit;font-weight:600;padding:9px 16px;border-radius:9px;border:0;background:var(--ac);color:#fff;cursor:pointer;margin:12px 8px 0 0}
+.btn.sec{background:var(--bg);color:var(--tx);border:1px solid var(--bd)}.btn:disabled{opacity:.45;cursor:default}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}
+td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mut);font-weight:600}
+code{font-size:12px;word-break:break-all;color:var(--mut)}
+.note{font-size:12px;color:var(--mut);margin-top:8px}
+.norend .rv{display:none}.chip .rv{display:inline-flex}.chip .rv svg{width:34px;height:34px}#big{text-align:center}#big svg{width:200px;max-width:100%;height:auto;background:var(--bg);border-radius:12px;border:1px solid var(--bd)}#fam{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-bottom:10px}#fam figure{margin:0;text-align:center}#fam svg,#fam img{width:130px;height:auto;background:var(--bg);border-radius:12px;border:1px solid var(--bd)}.norend #fam{display:none}
+.tg{flex-direction:row;align-items:center;gap:6px;margin-bottom:8px}
+</style><script src="./fflModule.cjs"></script>
+</head><body><main>
+<h1>🧬 Mii Mixer</h1>
+<p class="s">Load two or more Wii Mii files (<b>.mii</b>, 74 bytes) and splice them into a new amalgamation.</p>
+
+<div class="c"><h2>1. Parents</h2>
+<div id="drop">Drop .mii files here or click to choose</div>
+<input id="fi" type="file" multiple accept=".mii,.bin" hidden>
+<div id="chips"></div>
+<div style="margin-top:10px"><button class="btn sec" id="ffl" style="margin:0">Load FFLResHigh.dat for accurate render…</button><input id="ffi" type="file" accept=".dat" hidden><span class="note" id="fst"> Accurate render: off (you supply your own file; it never leaves your browser)</span></div></div>
+
+<div class="c"><h2>2. How to mix each part</h2>
+<div class="g" id="groups"></div>
+<label style="margin-top:12px;max-width:300px">Name for the new Mii (max 10 chars, blank = auto)<input type="text" id="nm" maxlength="10"></label>
+<button class="btn" id="mix" disabled>Mix!</button>
+<div class="note"><b>Random</b>: whole part from one random parent · <b>Chaos</b>: every setting from a random parent · <b>Blend</b>: sizes/positions averaged, styles picked randomly · or lock a part to one parent.</div></div>
+
+<div class="c" id="res" hidden><h2>3. Result</h2>
+<label class="tg"><input type="checkbox" id="rendchk" checked> Show render preview</label>
+<div id="fam"></div>
+<div id="big" class="rv"></div>
+<div class="tw"><table id="tb"></table></div>
+<button class="btn" id="dl">Download .mii (74 bytes)</button><button class="btn sec" id="dl2">Download .rsd (with checksum)</button><button class="btn sec" id="again">Mix again</button>
+<div class="note">Filename gets a new version number on every download. A fresh Mii ID is written. The .mii is the raw 74-byte Wii format; the .rsd is the same data plus the 2-byte checksum. Unknown bits and the creator name come from the first parent.</div>
+<code id="hex"></code></div>
+</main>
+<script>
+// [group, label, byteOffset, shift, bits, width, numeric]
+const F=[];const add=(g,n,o,s,b,w,num)=>F.push({g,n,o,s,b,w,num:!!num});
+add('Identity','Gender',0,14,1,2);add('Identity','Birth month',0,10,4,2);add('Identity','Birth day',0,5,5,2);add('Identity','Favorite color',0,1,4,2);
+add('Body','Height',22,0,8,1,1);add('Body','Build',23,0,8,1,1);
+add('Face','Shape',32,13,3,2);add('Face','Skin color',32,10,3,2);add('Face','Feature (wrinkles etc.)',32,6,4,2);
+add('Hair','Style',34,9,7,2);add('Hair','Color',34,6,3,2);add('Hair','Flip',34,5,1,2);
+add('Eyebrows','Style',36,27,5,4);add('Eyebrows','Rotation',36,22,4,4,1);add('Eyebrows','Color',36,13,3,4);add('Eyebrows','Size',36,9,4,4,1);add('Eyebrows','Vertical',36,4,5,4,1);add('Eyebrows','Spacing',36,0,4,4,1);
+add('Eyes','Style',40,26,6,4);add('Eyes','Rotation',40,21,3,4,1);add('Eyes','Vertical',40,16,5,4,1);add('Eyes','Color',40,13,3,4);add('Eyes','Size',40,9,3,4,1);add('Eyes','Spacing',40,5,4,4,1);
+add('Nose','Style',44,12,4,2);add('Nose','Size',44,8,4,2,1);add('Nose','Vertical',44,3,5,2,1);
+add('Mouth','Style',46,11,5,2);add('Mouth','Color',46,9,2,2);add('Mouth','Size',46,5,4,2,1);add('Mouth','Vertical',46,0,5,2,1);
+add('Glasses','Style',48,12,4,2);add('Glasses','Color',48,9,3,2);add('Glasses','Size',48,5,3,2,1);add('Glasses','Vertical',48,0,5,2,1);
+add('Facial hair','Mustache',50,14,2,2);add('Facial hair','Beard',50,12,2,2);add('Facial hair','Color',50,9,3,2);add('Facial hair','Mustache size',50,5,4,2,1);add('Facial hair','Mustache vertical',50,0,5,2,1);
+add('Mole','Enabled',52,15,1,2);add('Mole','Size',52,11,4,2,1);add('Mole','Vertical',52,6,5,2,1);add('Mole','Horizontal',52,1,5,2,1);
+const GR=[...new Set(F.map(f=>f.g))];
+const rd=(u,f)=>{const dv=new DataView(u.buffer);const v=f.w==1?dv.getUint8(f.o):f.w==2?dv.getUint16(f.o):dv.getUint32(f.o);return (v>>>f.s)&((1<<f.b)-1)};
+const wr=(u,f,val)=>{const dv=new DataView(u.buffer);const m=(((1<<f.b)-1)<<f.s)>>>0;let v=f.w==1?dv.getUint8(f.o):f.w==2?dv.getUint16(f.o):dv.getUint32(f.o);v=((v&~m)|((val<<f.s)>>>0&m))>>>0;f.w==1?dv.setUint8(f.o,v):f.w==2?dv.setUint16(f.o,v):dv.setUint32(f.o,v)};
+const getName=u=>{let s='';for(let i=2;i<22;i+=2){const c=(u[i]<<8)|u[i+1];if(!c)break;s+=String.fromCharCode(c)}return s};
+const setName=(u,s)=>{for(let i=0;i<10;i++){const c=s.charCodeAt(i)||0;u[2+i*2]=c>>8;u[3+i*2]=c&255}};
+const crc=u=>{let c=0;for(let i=0;i<u.length;i++){c^=u[i]<<8;for(let k=0;k<8;k++)c=c&0x8000?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF}return c};
+const R=n=>Math.floor(Math.random()*n),pick=a=>a[R(a.length)];
+let miis=[],out=null,ver=0;
+const $=id=>document.getElementById(id);
+function drawChips(){$('chips').innerHTML='';miis.forEach((m,i)=>{const d=document.createElement('span');d.className='chip';d.innerHTML='<span class="rv">'+render(m.u)+'</span>';d.append((i+1)+'. '+(m.name||'(unnamed)'));const b=document.createElement('button');b.textContent='×';b.onclick=()=>{miis.splice(i,1);refresh()};d.append(b);$('chips').append(d)});}
+function refresh(){drawChips();$('mix').disabled=miis.length<2;
+ GR.forEach(g=>{const s=$('sel-'+g),cur=s.value;s.length=3;miis.forEach((m,i)=>s.add(new Option('Only #'+(i+1)+' '+(m.name||''),i)));s.value=[...s.options].some(o=>o.value==cur)?cur:'random'});}
+async function load(files){for(const f of files){const u=new Uint8Array(await f.arrayBuffer());if(u.length<74){alert(f.name+': too small for a Wii Mii (needs 74 bytes)');continue}
+ const d=u.slice(0,74);miis.push({u:d,name:getName(d)||f.name.replace(/\.\w+$/,'')})}refresh()}
+$('groups').innerHTML=GR.map(g=>`<label>${g}<select id="sel-${g}"><option value="random">Random</option><option value="chaos">Chaos</option><option value="blend">Blend</option></select></label>`).join('');
+const dr=$('drop'),fi=$('fi');dr.onclick=()=>fi.click();fi.onchange=()=>{load([...fi.files]);fi.value=''};
+dr.ondragover=e=>{e.preventDefault();dr.classList.add('o')};dr.ondragleave=()=>dr.classList.remove('o');
+dr.ondrop=e=>{e.preventDefault();dr.classList.remove('o');load(e.dataTransfer.files)};
+function mix(){
+ const o=new Uint8Array(miis[0].u),src={};
+ GR.forEach(g=>{const m=$('sel-'+g).value;const fs=F.filter(f=>f.g==g);
+  if(m=='random'||/^\d+$/.test(m)){const i=m=='random'?R(miis.length):+m;fs.forEach(f=>wr(o,f,rd(miis[i].u,f)));src[g]='#'+(i+1)}
+  else if(m=='chaos'){fs.forEach(f=>wr(o,f,rd(pick(miis).u,f)));src[g]='mixed'}
+  else{const p=pick(miis);fs.forEach(f=>{const vals=miis.map(x=>rd(x.u,f));wr(o,f,f.num?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):rd(p.u,f))});src[g]='blend'}});
+ let n=$('nm').value.trim();
+ if(!n){const a=pick(miis).name,b=pick(miis).name;n=(a.slice(0,Math.ceil(a.length/2))+b.slice(Math.floor(b.length/2))).slice(0,10)||'Mix'}
+ setName(o,n);
+ o[24]=(o[24]&0xE0)|R(32);o[25]=R(256);o[26]=R(256);o[27]=R(256);
+ 
+ out={u:o,name:n};
+ $('tb').innerHTML='<tr><th>Part</th><th>Taken from</th><th>Values</th></tr>'+GR.map(g=>`<tr><td>${g}</td><td>${src[g]}</td><td>${F.filter(f=>f.g==g).map(f=>f.n+' '+rd(o,f)).join(', ')}</td></tr>`).join('')+`<tr><td>Name</td><td>auto/typed</td><td>${n}</td></tr>`;
+ $('hex').textContent=[...o].map(b=>b.toString(16).padStart(2,'0')).join(' ');
+ $('big').innerHTML=render(o);$('res').hidden=false;accurate(o);}
+$('mix').onclick=mix;$('again').onclick=mix;
+$('rendchk').onchange=e=>document.body.classList.toggle('norend',!e.target.checked);
+let fflBuf=null,miiLib=null;
+$('ffl').onclick=()=>$('ffi').click();
+if(!document.querySelector('script[src$="fflModule.cjs"]')){$('ffl').parentElement.style.display='none';$('rendchk').parentElement.lastChild.textContent=' Show render preview (stylized; the accurate render needs the local version)'}
+if(document.querySelector('script[src$="fflModule.cjs"]'))fetch('./FFLResHigh.dat').then(r=>r.ok?r.arrayBuffer():null).then(b=>{if(b){fflBuf=new Uint8Array(b);$('fst').textContent=' Loaded FFLResHigh.dat from this folder'}}).catch(()=>{});
+$('ffi').onchange=async e=>{const f=e.target.files[0];if(!f)return;fflBuf=new Uint8Array(await f.arrayBuffer());$('fst').textContent=' Loaded '+f.name+' ('+(f.size/1048576).toFixed(1)+' MB)';e.target.value='';if(out)accurate(out.u)};
+const imgCache={};let accTok=0;
+async function accImg(u){
+ const hex=[...u].map(x=>x.toString(16).padStart(2,'0')).join('');
+ if(imgCache[hex])return imgCache[hex];
+ miiLib??=import(document.querySelector('script[src$="fflModule.cjs"]')?'./miijs.browser.esm.js':'https://cdn.jsdelivr.net/npm/miijs@3.1.0/dist/miijs.browser.esm.js');
+ const M=await miiLib,img=await M.renderMii(hex,{fullBody:false,size:256,fflResBuffer:fflBuf});
+ let b='';new Uint8Array(img).forEach(x=>b+=String.fromCharCode(x));
+ return imgCache[hex]='data:image/png;base64,'+btoa(b);
+}
+const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+async function accurate(o){
+ const tok=++accTok;
+ $('fam').innerHTML=miis.map((m,i)=>'<figure><div id="f'+i+'">'+render(m.u)+'</div><figcaption class="note">Parent '+(i+1)+': '+esc(m.name||'')+'</figcaption></figure>').join('');
+ if(!fflBuf)return;
+ const st=$('fst');
+ try{
+  st.textContent=' Rendering with MiiJS/FFL\u2026';
+  for(const [id,u,w] of [...miis.map((m,i)=>['f'+i,m.u,130]),['big',o,200]]){
+   const src=await accImg(u);if(tok!==accTok)return;
+   const el=$(id);if(el)el.innerHTML='<img alt="Mii render" width="'+w+'" src="'+src+'">';
+  }
+  st.textContent=' Accurate render: on';
+ }catch(err){console.error(err);st.textContent=' Accurate render failed ('+(err&&err.message||err)+'). Showing stylized render.'}
+}
+const SK=['#ffd6b0','#f2b98a','#c98a5c','#f0a98c','#a96a45','#6b4228'],HC=['#1b1b1f','#3e2614','#6b3e1d','#a8682c','#8d8d94','#c9a24a','#e3c872','#d86a2b'],EC=['#111','#6b7280','#6b4423','#3b82c4','#3f9f5a','#8a6a2a'],FC=['#e5384a','#f08a24','#f5d333','#9ccc3c','#2e9f4f','#3a62d8','#37bfd9','#f27fb0','#8a4fc8','#7a4f2c','#f2f2f2','#2a2a2a'],MC=['#d9733a','#d03a3a','#e87a96'],GC=['#222','#a33','#d96b1c','#3a62d8','#888','#2e9f4f','#ddd','#e5c33a'];
+function render(u){
+ const g=(a,b)=>rd(u,F.find(f=>f.g==a&&f.n==b)),k=(v,a,b)=>Math.max(a,Math.min(b,v));
+ const sk=SK[k(g('Face','Skin color'),0,5)],hc=HC[g('Hair','Color')],fav=FC[g('Identity','Favorite color')%12];
+ const sh=g('Face','Shape')%8,rx=[52,48,56,50,54,46,58,50][sh],ry=[58,60,56,62,54,64,52,58][sh];
+ const hs=g('Hair','Style'),t=hs%4,fl=g('Hair','Flip')?-1:1,top=100-ry;
+ const bw=44+g('Body','Build')*0.4,sc=0.82+g('Body','Height')*0.0014;
+ const ey=64+g('Eyes','Vertical')*1.5,ex=18+g('Eyes','Spacing')*1.5,er=3+g('Eyes','Size')*0.7+2,etl=(g('Eyes','Rotation')-3)*1.5,ecol=EC[k(g('Eyes','Color'),0,5)];
+ const by=50+g('Eyebrows','Vertical')*1.5,bx=14+g('Eyebrows','Spacing')*1.5,bl=8+g('Eyebrows','Size')*1.6,bt=(g('Eyebrows','Rotation')-6)*1.4,bc=HC[g('Eyebrows','Color')];
+ const ny=88+g('Nose','Vertical')*1.2,nw=5+g('Nose','Size')*1.4;
+ const my=110+g('Mouth','Vertical')*0.8,mw=12+g('Mouth','Size')*2.5,ms=g('Mouth','Style'),mc=MC[k(g('Mouth','Color'),0,2)];
+ let s='<svg viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="120" r="96" fill="'+fav+'" opacity=".22"/><g transform="translate(0,'+(260*(1-sc))+') scale(1,'+sc+')">';
+ if(t==1||t==2)s+='<ellipse cx="100" cy="110" rx="'+(rx+9)+'" ry="'+(ry+4)+'" fill="'+hc+'"/>';
+ s+='<path d="M'+(100-bw)+' 262Q'+(100-bw)+' 178 100 172Q'+(100+bw)+' 178 '+(100+bw)+' 262Z" fill="'+fav+'"/><rect x="86" y="150" width="28" height="30" fill="'+sk+'"/>';
+ s+='<ellipse cx="100" cy="100" rx="'+rx+'" ry="'+ry+'" fill="'+sk+'"/>';
+ const bd=g('Facial hair','Beard'),mu=g('Facial hair','Mustache'),fh=HC[g('Facial hair','Color')];
+ if(bd)s+='<path d="M'+(100-rx+6)+' 110Q'+(100-rx+8)+' '+(100+ry+2)+' 100 '+(100+ry+2)+'Q'+(100+rx-8)+' '+(100+ry+2)+' '+(100+rx-6)+' 110Q100 '+(bd>1?150:130)+' '+(100-rx+6)+' 110Z" fill="'+fh+'" opacity=".9"/>';
+ s+='<path d="M'+(100-rx-2)+' 96Q'+(100-rx-2)+' '+(top-12)+' 100 '+(top-12)+'Q'+(100+rx+2)+' '+(top-12)+' '+(100+rx+2)+' 96Q'+(100+fl*30)+' '+(top+8)+' '+(100-fl*rx*0.7)+' 76Q'+(100-fl*10)+' '+(top+20)+' '+(100-fl*rx)+' 96Z" fill="'+hc+'"/>';
+ if(t==2)s+='<ellipse cx="100" cy="'+(top-8)+'" rx="'+(rx*0.7)+'" ry="14" fill="'+hc+'"/>';
+ if(t==3)for(let i=-2;i<=2;i++)s+='<path d="M'+(100+i*16-9)+' '+(top+2)+'L'+(100+i*16)+' '+(top-26+Math.abs(i)*5)+'L'+(100+i*16+9)+' '+(top+2)+'Z" fill="'+hc+'"/>';
+ for(const d of[-1,1]){
+  s+='<g transform="rotate('+(d*etl)+' '+(100+d*ex)+' '+ey+')"><ellipse cx="'+(100+d*ex)+'" cy="'+ey+'" rx="'+er+'" ry="'+(er*0.85)+'" fill="#fff" stroke="#0003"/><circle cx="'+(100+d*ex)+'" cy="'+ey+'" r="'+(er*0.55)+'" fill="'+ecol+'"/></g>';
+  s+='<line x1="'+(100+d*bx-bl/2)+'" y1="'+(by+d*bt/2)+'" x2="'+(100+d*bx+bl/2)+'" y2="'+(by-d*bt/2)+'" stroke="'+bc+'" stroke-width="4" stroke-linecap="round"/>';
+ }
+ s+='<path d="M'+(100-nw/2)+' '+ny+'Q100 '+(ny+6)+' '+(100+nw/2)+' '+ny+'" stroke="#0006" stroke-width="2.5" fill="none" stroke-linecap="round"/>';
+ if(mu)s+='<path d="M'+(100-mw*0.6)+' '+(my-6)+'Q100 '+(my-16)+' '+(100+mw*0.6)+' '+(my-6)+'Q100 '+(my-8+mu*3)+' '+(100-mw*0.6)+' '+(my-6)+'Z" fill="'+fh+'"/>';
+ s+=ms%3==0?'<path d="M'+(100-mw/2)+' '+my+'Q100 '+(my+10)+' '+(100+mw/2)+' '+my+'" stroke="'+mc+'" stroke-width="4" fill="none" stroke-linecap="round"/>':'<path d="M'+(100-mw/2)+' '+my+'Q100 '+(my+16)+' '+(100+mw/2)+' '+my+'Q100 '+(my+3)+' '+(100-mw/2)+' '+my+'Z" fill="'+mc+'"/>';
+ const gl=g('Glasses','Style');
+ if(gl){const gy=64+g('Glasses','Vertical')*1.5,gr=10+g('Glasses','Size')*1.6,gc=GC[g('Glasses','Color')];
+  for(const d of[-1,1])s+='<rect x="'+(100+d*ex-gr-2)+'" y="'+(gy-gr*0.7)+'" width="'+(gr*2+4)+'" height="'+(gr*1.4)+'" rx="'+(gl%2?gr*0.7:4)+'" fill="#9cf3" stroke="'+gc+'" stroke-width="3"/>';
+  s+='<line x1="'+(100-ex+gr+2)+'" y1="'+gy+'" x2="'+(100+ex-gr-2)+'" y2="'+gy+'" stroke="'+gc+'" stroke-width="3"/>';}
+ if(g('Mole','Enabled'))s+='<circle cx="'+(60+g('Mole','Horizontal')*5)+'" cy="'+(60+g('Mole','Vertical')*2)+'" r="'+(1.5+g('Mole','Size')*0.4)+'" fill="#2a1a12"/>';
+ return s+'</g></svg>';}
+const save=(bytes,ext)=>{ver++;const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes]));
+ a.download=(out.name.replace(/[^\w-]/g,'_')||'mii')+'_amalgam_v'+ver+'.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+$('dl').onclick=()=>save(out.u,'mii');
+$('dl2').onclick=()=>{const c=crc(out.u),r=new Uint8Array(76);r.set(out.u);r[74]=c>>8;r[75]=c&255;save(r,'rsd')};
+refresh();
+</script></body></html>

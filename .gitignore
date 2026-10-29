@@ -1,0 +1,15 @@
+# Nintendo's data: never commit this
+*.dat
+# Downloaded by setup.py (third-party, own licenses)
+fflModule.cjs
+ffl-emscripten.wasm
+FFL_LICENSE
+THIRD_PARTY_NOTICES.md
+miijs.browser*.js
+chunks/
+*.glb
+silhouette*.png
+# Your own Mii files
+*.mii
+*.rsd
+*.rcd
